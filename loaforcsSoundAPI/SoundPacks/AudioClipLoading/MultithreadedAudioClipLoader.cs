@@ -29,7 +29,9 @@ class MultithreadedAudioClipLoader : IAudioClipLoader {
 	public void LoadAllBlocking() {
 		Stopwatch timer = Stopwatch.StartNew();
 
-		for(int i = 0; i < 16; i++) {
+		bool useThreads = !UnityEngine.Debug.isDebugBuild;
+
+		for(int i = 0; i < 16 && useThreads; i++) {
 			new Thread(() => {
 				LoadSoundOperation operation;
 				while(_queuedOperations.Count == 0 && !_threadsShouldExit) {
@@ -58,7 +60,21 @@ class MultithreadedAudioClipLoader : IAudioClipLoader {
 
 		while(_webRequestOperations.Count > 0) {
 			foreach(LoadSoundOperation operation in _webRequestOperations.ToList().Where(operation => operation.IsReady)) { // .ToList() here is so we can modify the current list without causing an exception
-				_queuedOperations.Enqueue(operation); // give to threads to do work
+				if(useThreads) {
+					_queuedOperations.Enqueue(operation); // give to threads to do work
+				} else {
+					try {
+						AudioClip clip = DownloadHandlerAudioClip.GetContent(operation.WebRequest);
+						operation.Sound.Clip = clip;
+						operation.WebRequest.Dispose();
+						Debuggers.SoundReplacementLoader?.Log("clip generated");
+
+						operation.IsDone = true;
+					} catch(Exception exception) {
+						_threadPoolExceptions.Add(exception);
+					}
+				}
+
 				_webRequestOperations.Remove(operation);
 			}
 

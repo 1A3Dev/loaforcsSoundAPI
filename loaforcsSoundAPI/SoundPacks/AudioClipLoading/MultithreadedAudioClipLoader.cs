@@ -42,16 +42,7 @@ class MultithreadedAudioClipLoader : IAudioClipLoader {
 				Debuggers.SoundReplacementLoader?.Log($"active threads at {_activeThreads}");
 
 				while(_queuedOperations.TryDequeue(out operation)) {
-					try {
-						AudioClip clip = DownloadHandlerAudioClip.GetContent(operation.WebRequest);
-						operation.Sound.Clip = clip;
-						operation.WebRequest.Dispose();
-						Debuggers.SoundReplacementLoader?.Log("clip generated");
-
-						operation.IsDone = true;
-					} catch(Exception exception) {
-						_threadPoolExceptions.Add(exception);
-					}
+					ProcessOperation(operation);
 				}
 
 				Interlocked.Decrement(ref _activeThreads);
@@ -63,16 +54,7 @@ class MultithreadedAudioClipLoader : IAudioClipLoader {
 				if(useThreads) {
 					_queuedOperations.Enqueue(operation); // give to threads to do work
 				} else {
-					try {
-						AudioClip clip = DownloadHandlerAudioClip.GetContent(operation.WebRequest);
-						operation.Sound.Clip = clip;
-						operation.WebRequest.Dispose();
-						Debuggers.SoundReplacementLoader?.Log("clip generated");
-
-						operation.IsDone = true;
-					} catch(Exception exception) {
-						_threadPoolExceptions.Add(exception);
-					}
+					ProcessOperation(operation);
 				}
 
 				_webRequestOperations.Remove(operation);
@@ -98,6 +80,19 @@ class MultithreadedAudioClipLoader : IAudioClipLoader {
 			foreach(Exception poolException in _threadPoolExceptions) {
 				loaforcsSoundAPI.Logger.LogError(poolException.ToString());
 			}
+		}
+	}
+
+	void ProcessOperation(LoadSoundOperation operation) {
+		try {
+			AudioClip clip = DownloadHandlerAudioClip.GetContent(operation.WebRequest);
+			operation.Sound.Clip = clip;
+			operation.WebRequest.Dispose();
+			Debuggers.SoundReplacementLoader?.Log("clip generated");
+
+			operation.IsDone = true;
+		} catch(Exception exception) {
+			_threadPoolExceptions.Add(exception);
 		}
 	}
 
